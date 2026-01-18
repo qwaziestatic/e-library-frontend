@@ -8,10 +8,9 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    const savedUser = localStorage.getItem('user_data');
-    
-    if (token && savedUser) {
-      setUser(JSON.parse(savedUser));
+    const userData = localStorage.getItem('user_data');
+    if (token && userData) {
+      setUser(JSON.parse(userData));
     }
     setLoading(false);
   }, []);
@@ -23,8 +22,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user_data');
+    localStorage.clear();
     setUser(null);
   };
 
