@@ -7,11 +7,8 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const userData = localStorage.getItem('user_data');
-    if (token && userData) {
-      setUser(JSON.parse(userData));
-    }
+    const savedUser = localStorage.getItem('user_data');
+    if (savedUser) setUser(JSON.parse(savedUser));
     setLoading(false);
   }, []);
 
@@ -24,6 +21,7 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     localStorage.clear();
     setUser(null);
+    window.location.href = '/login';
   };
 
   return (
