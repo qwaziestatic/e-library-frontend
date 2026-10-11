@@ -1,68 +1,13 @@
 import { useEffect, useState } from 'react';
-import api from '../api/axios';
-import { ClipboardCheck, RotateCcw, AlertTriangle } from 'lucide-react';
-
+import { Plus, RotateCcw } from 'lucide-react';
+import api, { getApiErrorMessage } from '../api/axios';
+import { Button, ErrorMessage, Field, Modal, PageHeader, SelectField } from '../components/ui';
 export default function Borrows() {
-  const [records, setRecords] = useState([]);
-
-  const fetchRecords = async () => {
-    const res = await api.get('/borrow-records');
-    setRecords(res.data);
-  };
-
-  useEffect(() => { fetchRecords(); }, []);
-
-  const handleReturn = async (id) => {
-    await api.patch(`/borrow-records/${id}/return`);
-    fetchRecords();
-  };
-
-  return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold mb-8">Active Borrows & Returns</h1>
-      <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50 border-b">
-            <tr>
-              <th className="p-4">Member</th>
-              <th className="p-4">Book</th>
-              <th className="p-4">Due Date</th>
-              <th className="p-4">Status</th>
-              <th className="p-4 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {records.map(record => {
-              const isOverdue = !record.returnDate && new Date(record.dueDate) < new Date();
-              return (
-                <tr key={record.id} className="border-b">
-                  <td className="p-4 font-medium">{record.member?.name}</td>
-                  <td className="p-4">{record.book?.title}</td>
-                  <td className={`p-4 ${isOverdue ? 'text-red-600 font-bold' : ''}`}>
-                    {new Date(record.dueDate).toLocaleDateString()}
-                  </td>
-                  <td className="p-4">
-                    {record.returnDate ? (
-                      <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs">Returned</span>
-                    ) : (
-                      <span className={`px-2 py-1 rounded text-xs ${isOverdue ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                        {isOverdue ? 'Overdue' : 'Borrowed'}
-                      </span>
-                    )}
-                  </td>
-                  <td className="p-4 text-right">
-                    {!record.returnDate && (
-                      <button onClick={() => handleReturn(record.id)} className="text-blue-600 hover:underline flex items-center gap-1 justify-end ml-auto">
-                        <RotateCcw size={16}/> Return Book
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+  const [records, setRecords] = useState([]); const [books, setBooks] = useState([]); const [members, setMembers] = useState([]); const [form, setForm] = useState(null); const [error, setError] = useState('');
+  const load = async () => { try { const [r, b, m] = await Promise.all([api.get('/borrow-records'), api.get('/books'), api.get('/members')]); setRecords(r.data); setBooks(b.data); setMembers(m.data); } catch (e) { setError(getApiErrorMessage(e, 'Unable to load borrowing data.')); } }; useEffect(() => { load(); }, []);
+  const borrow = async e => { e.preventDefault(); try { await api.post('/borrow-records/borrow', { book_id: Number(form.book_id), member_id: Number(form.member_id), due_date: form.due_date }); setForm(null); load(); } catch (e) { setError(getApiErrorMessage(e, 'Unable to borrow book. Check availability.')); } };
+  const returnBook = async id => { try { await api.post('/borrow-records/return', { borrow_record_id: Number(id) }); load(); } catch (e) { setError(getApiErrorMessage(e, 'Unable to return book.')); } };
+  return <div className="page-shell"><PageHeader eyebrow="Circulation" title="Borrowing" description="Track loans, due dates and returns." action={<Button onClick={() => setForm({ book_id: '', member_id: '', due_date: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10) })}><Plus size={17} /> New borrow</Button>} /><ErrorMessage message={error} /><section className="card table-wrap"><table className="data-table"><thead><tr><th>Book</th><th>Member</th><th>Due date</th><th>Status</th><th /></tr></thead><tbody>{records.map(r => { const overdue = !r.return_date && new Date(r.due_date) < new Date(); return <tr key={r.id}><td>{r.book?.title || `Book #${r.book_id}`}</td><td>{r.member?.name || `Member #${r.member_id}`}</td><td>{new Date(r.due_date).toLocaleDateString()}</td><td><span className={`badge ${r.return_date ? 'badge-green' : overdue ? 'badge-red' : 'badge-amber'}`}>{r.return_date ? 'Returned' : overdue ? 'Overdue' : 'Borrowed'}</span></td><td className="text-right">{!r.return_date && <Button variant="secondary" onClick={() => returnBook(r.id)}><RotateCcw size={15} /> Return</Button>}</td></tr>; })}</tbody></table>{!records.length && <div className="empty-state">No borrowing records yet.</div>}</section>
+    {form && <Modal title="Borrow a book" onClose={() => setForm(null)}><form onSubmit={borrow}><div className="space-y-4"><SelectField label="Book" required value={form.book_id} onChange={e => setForm({ ...form, book_id: e.target.value })}><option value="">Choose an available book</option>{books.filter(b => b.available_copies > 0).map(b => <option value={b.id} key={b.id}>{b.title} ({b.available_copies} available)</option>)}</SelectField><SelectField label="Member" required value={form.member_id} onChange={e => setForm({ ...form, member_id: e.target.value })}><option value="">Choose member</option>{members.map(m => <option value={m.id} key={m.id}>{m.name}</option>)}</SelectField><Field label="Due date" type="date" required value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} /></div><div className="form-actions"><Button variant="ghost" type="button" onClick={() => setForm(null)}>Cancel</Button><Button type="submit">Confirm borrow</Button></div></form></Modal>}
+  </div>;
 }

@@ -1,82 +1,19 @@
-import { useEffect, useState } from 'react';
-import api from '../api/axios';
-import { Plus, Trash2, Search, X } from 'lucide-react';
+import { useContext, useEffect, useState } from 'react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
+import api, { getApiErrorMessage } from '../api/axios';
+import { AuthContext } from '../context/AuthContext';
+import { Button, ErrorMessage, Field, Modal, PageHeader, SelectField } from '../components/ui';
 
+const blank = { title: '', author: '', published_year: new Date().getFullYear(), available_copies: 1, genre_id: '' };
 export default function Books() {
-  const [books, setBooks] = useState([]);
-  const [genres, setGenres] = useState([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [showModal, setShowModal] = useState(false);
-  const [newBook, setNewBook] = useState({ title: '', author: '', isbn: '', genreId: '', totalCopies: 1 });
-
-  const fetchData = async () => {
-    try {
-      const [b, g] = await Promise.all([api.get('/books'), api.get('/genres')]);
-      setBooks(b.data);
-      setGenres(g.data);
-    } catch (e) { console.error("Database connection failed"); }
-  };
-
-  useEffect(() => { fetchData(); }, []);
-
-  const handleAdd = async (e) => {
-    e.preventDefault();
-    await api.post('/books', { ...newBook, copiesAvailable: newBook.totalCopies });
-    setShowModal(false);
-    fetchData();
-  };
-
-  return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Book Inventory</h1>
-        <button onClick={() => setShowModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-lg"><Plus size={20}/> Add Book</button>
-      </div>
-      
-      <div className="relative mb-6">
-        <Search className="absolute left-3 top-3 text-slate-400" size={20}/>
-        <input placeholder="Search title or author..." className="w-full pl-10 p-3 border rounded-xl" onChange={e => setSearchTerm(e.target.value)} />
-      </div>
-
-      <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50 border-b font-bold">
-            <tr><th className="p-4">Book Details</th><th className="p-4">Genre</th><th className="p-4">Available</th><th className="p-4 text-right">Actions</th></tr>
-          </thead>
-          <tbody>
-            {books.filter(b => b.title.toLowerCase().includes(searchTerm.toLowerCase())).map(book => (
-              <tr key={book.id} className="border-b hover:bg-slate-50">
-                <td className="p-4 font-semibold">{book.title}<br/><span className="text-xs text-slate-400">{book.author}</span></td>
-                <td className="p-4 uppercase text-xs font-bold text-blue-500">{book.genre?.name || 'N/A'}</td>
-                <td className="p-4 font-bold">{book.copiesAvailable} / {book.totalCopies}</td>
-                <td className="p-4 text-right">
-                  <button onClick={async () => { await api.delete(`/books/${book.id}`); fetchData(); }} className="text-red-500 p-2 rounded-lg hover:bg-red-50"><Trash2 size={18}/></button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {showModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-          <form onSubmit={handleAdd} className="bg-white p-8 rounded-3xl w-full max-w-md shadow-2xl relative">
-            <button type="button" onClick={() => setShowModal(false)} className="absolute right-6 top-6 text-slate-400"><X size={24}/></button>
-            <h2 className="text-2xl font-bold mb-6">Register New Book</h2>
-            <div className="space-y-4">
-              <input placeholder="Book Title" required className="w-full p-3 border rounded-xl" onChange={e => setNewBook({...newBook, title: e.target.value})} />
-              <input placeholder="Author Name" required className="w-full p-3 border rounded-xl" onChange={e => setNewBook({...newBook, author: e.target.value})} />
-              <input placeholder="ISBN" required className="w-full p-3 border rounded-xl" onChange={e => setNewBook({...newBook, isbn: e.target.value})} />
-              <select required className="w-full p-3 border rounded-xl bg-white" onChange={e => setNewBook({...newBook, genreId: e.target.value})}>
-                <option value="">Select Genre</option>
-                {genres.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-              </select>
-              <input type="number" placeholder="Total Copies" className="w-full p-3 border rounded-xl" onChange={e => setNewBook({...newBook, totalCopies: parseInt(e.target.value)})} />
-              <button className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold mt-4 shadow-lg shadow-blue-200">Save to Inventory</button>
-            </div>
-          </form>
-        </div>
-      )}
-    </div>
-  );
+  const { user } = useContext(AuthContext);
+  const [books, setBooks] = useState([]); const [genres, setGenres] = useState([]); const [query, setQuery] = useState(''); const [genreFilter, setGenreFilter] = useState(''); const [availability, setAvailability] = useState(''); const [form, setForm] = useState(null); const [error, setError] = useState('');
+  const load = async () => { try { const [b, g] = await Promise.all([api.get('/books'), api.get('/genres')]); setBooks(b.data); setGenres(g.data); } catch (e) { setError(getApiErrorMessage(e, 'Unable to load books.')); } };
+  useEffect(() => { load(); }, []);
+  const save = async e => { e.preventDefault(); try { const payload = { ...form, published_year: Number(form.published_year), available_copies: Number(form.available_copies), genre_id: Number(form.genre_id) }; if (form.id) await api.patch(`/books/${form.id}`, payload); else await api.post('/books', payload); setForm(null); load(); } catch (e) { setError(getApiErrorMessage(e, 'Unable to save book.')); } };
+  const remove = async id => { if (!window.confirm('Delete this book?')) return; try { await api.delete(`/books/${id}`); load(); } catch (e) { setError(getApiErrorMessage(e, 'Unable to delete book.')); } };
+  const shown = books.filter(b => `${b.title} ${b.author}`.toLowerCase().includes(query.toLowerCase())).filter(b => !genreFilter || String(b.genre_id) === genreFilter).filter(b => availability === '' || (availability === 'available' ? b.available_copies > 0 : b.available_copies === 0));
+  return <div className="page-shell"><PageHeader eyebrow="Catalog" title="Books" description={`${books.length} titles in your collection.`} action={<Button onClick={() => setForm(blank)}><Plus size={17} /> Add book</Button>} /><ErrorMessage message={error} /><div className="toolbar"><input className="search" placeholder="Search by title or author…" value={query} onChange={e => setQuery(e.target.value)} /><select className="search" value={genreFilter} onChange={e => setGenreFilter(e.target.value)}><option value="">All genres</option>{genres.map(g => <option value={g.id} key={g.id}>{g.name}</option>)}</select><select className="search" value={availability} onChange={e => setAvailability(e.target.value)}><option value="">All availability</option><option value="available">Available</option><option value="unavailable">Checked out</option></select></div><section className="card table-wrap"><table className="data-table"><thead><tr><th>Book</th><th>Genre</th><th>Published</th><th>Available</th><th /></tr></thead><tbody>{shown.map(b => <tr key={b.id}><td><strong>{b.title}</strong><small className="block text-slate-500">{b.author}</small></td><td>{b.genre?.name || genres.find(g => g.id === b.genre_id)?.name || '—'}</td><td>{b.published_year}</td><td><span className={b.available_copies ? 'badge badge-green' : 'badge badge-red'}>{b.available_copies} available</span></td><td className="text-right"><button className="button button-ghost" onClick={() => setForm({ ...b, genre_id: b.genre_id || b.genre?.id })}><Pencil size={16} /></button>{user?.role === 'admin' && <button className="button button-danger" onClick={() => remove(b.id)}><Trash2 size={16} /></button>}</td></tr>)}</tbody></table>{!shown.length && <div className="empty-state">No books match your filters.</div>}</section>
+    {form && <Modal title={form.id ? 'Edit book' : 'Add a book'} onClose={() => setForm(null)}><form onSubmit={save}><div className="form-grid"><Field label="Title" required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} /><Field label="Author" required value={form.author} onChange={e => setForm({ ...form, author: e.target.value })} /><Field label="Published year" type="number" min="1800" required value={form.published_year} onChange={e => setForm({ ...form, published_year: e.target.value })} /><Field label="Available copies" type="number" min="1" required value={form.available_copies} onChange={e => setForm({ ...form, available_copies: e.target.value })} /><SelectField label="Genre" required value={form.genre_id} onChange={e => setForm({ ...form, genre_id: e.target.value })}><option value="">Choose genre</option>{genres.map(g => <option value={g.id} key={g.id}>{g.name}</option>)}</SelectField></div><div className="form-actions"><Button variant="ghost" type="button" onClick={() => setForm(null)}>Cancel</Button><Button type="submit">Save book</Button></div></form></Modal>}
+  </div>;
 }

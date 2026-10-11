@@ -1,75 +1,19 @@
-import { useEffect, useState } from 'react';
-import api from '../api/axios';
-import { UserPlus, Search, Trash2, User } from 'lucide-react';
-
+import { useContext, useEffect, useState } from 'react';
+import { Plus, Pencil, Trash2, History } from 'lucide-react';
+import api, { getApiErrorMessage } from '../api/axios';
+import { AuthContext } from '../context/AuthContext';
+import { Button, ErrorMessage, Field, Modal, PageHeader } from '../components/ui';
+const blank = { name: '', email: '', phone: '', join_date: new Date().toISOString().slice(0, 10) };
 export default function Members() {
-  const [members, setMembers] = useState([]);
-  const [searchTerm, setSearchTerm] = useState("");
-
-  const fetchMembers = async () => {
-    try {
-      const res = await api.get('/members');
-      setMembers(res.data);
-    } catch (err) { console.error(err); }
-  };
-
-  useEffect(() => { fetchMembers(); }, []);
-
-  const handleDelete = async (id) => {
-    if (confirm("Remove this member?")) {
-      await api.delete(`/members/${id}`);
-      fetchMembers();
-    }
-  };
-
-  return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-2xl font-bold">Library Members</h1>
-        <button className="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-green-700 transition">
-          <UserPlus size={18}/> Register Member
-        </button>
-      </div>
-
-      <div className="mb-6 relative">
-        <Search className="absolute left-3 top-3 text-slate-400" size={20}/>
-        <input 
-          type="text" 
-          placeholder="Search by name or email..." 
-          className="w-full pl-10 pr-4 py-2 border rounded-xl outline-none focus:ring-2 focus:ring-green-500"
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50 border-b">
-            <tr>
-              <th className="p-4 font-semibold text-slate-600">Name</th>
-              <th className="p-4 font-semibold text-slate-600">Email</th>
-              <th className="p-4 font-semibold text-slate-600">Join Date</th>
-              <th className="p-4 font-semibold text-slate-600 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {members.filter(m => m.name.toLowerCase().includes(searchTerm.toLowerCase())).map(member => (
-              <tr key={member.id} className="border-b hover:bg-slate-50 transition">
-                <td className="p-4 flex items-center gap-3">
-                  <div className="bg-green-100 text-green-600 p-2 rounded-full"><User size={16}/></div>
-                  <span className="font-medium">{member.name}</span>
-                </td>
-                <td className="p-4 text-slate-600">{member.email}</td>
-                <td className="p-4 text-slate-500">{new Date(member.createdAt).toLocaleDateString()}</td>
-                <td className="p-4 text-right">
-                  <button onClick={() => handleDelete(member.id)} className="text-red-500 hover:bg-red-50 p-2 rounded">
-                    <Trash2 size={18}/>
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+  const { user } = useContext(AuthContext);
+  const [members, setMembers] = useState([]); const [query, setQuery] = useState(''); const [form, setForm] = useState(null); const [history, setHistory] = useState(null); const [error, setError] = useState('');
+  const load = async () => { try { setMembers((await api.get('/members')).data); } catch (e) { setError(getApiErrorMessage(e, 'Unable to load members.')); } }; useEffect(() => { load(); }, []);
+  const save = async e => { e.preventDefault(); try { const { id, ...payload } = form; if (id) await api.patch(`/members/${id}`, payload); else await api.post('/members', payload); setForm(null); load(); } catch (e) { setError(getApiErrorMessage(e, 'Unable to save member.')); } };
+  const remove = async id => { if (!window.confirm('Delete this member?')) return; try { await api.delete(`/members/${id}`); load(); } catch (e) { setError(getApiErrorMessage(e, 'Unable to delete member.')); } };
+  const showHistory = async member => { try { setHistory({ member, loading: true, records: [] }); const records = await api.get(`/members/${member.id}/borrowing-history`); setHistory({ member, loading: false, records: records.data }); } catch (e) { setError(getApiErrorMessage(e, 'Unable to load borrowing history.')); setHistory(null); } };
+  const shown = members.filter(m => `${m.name} ${m.email} ${m.phone}`.toLowerCase().includes(query.toLowerCase()));
+  return <div className="page-shell"><PageHeader eyebrow="Community" title="Members" description={`${members.length} registered members.`} action={<Button onClick={() => setForm(blank)}><Plus size={17} /> Add member</Button>} /><ErrorMessage message={error} /><div className="toolbar"><input className="search" placeholder="Search name, email or phone…" value={query} onChange={e => setQuery(e.target.value)} /></div><section className="card table-wrap"><table className="data-table"><thead><tr><th>Member</th><th>Phone</th><th>Joined</th><th /></tr></thead><tbody>{shown.map(m => <tr key={m.id}><td><strong>{m.name}</strong><small className="block text-slate-500">{m.email}</small></td><td>{m.phone}</td><td>{new Date(m.join_date).toLocaleDateString()}</td><td className="text-right"><button className="button button-secondary" onClick={() => showHistory(m)}><History size={15} /> History</button><button className="button button-ghost" onClick={() => setForm(m)}><Pencil size={16} /></button>{user?.role === 'admin' && <button className="button button-danger" onClick={() => remove(m.id)}><Trash2 size={16} /></button>}</td></tr>)}</tbody></table>{!shown.length && <div className="empty-state">No members match your search.</div>}</section>
+    {form && <Modal title={form.id ? 'Edit member' : 'Add member'} onClose={() => setForm(null)}><form onSubmit={save}><div className="form-grid"><Field label="Full name" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /><Field label="Email" type="email" required value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /><Field label="Phone" required value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />{!form.id && <Field label="Join date" type="date" required value={form.join_date} onChange={e => setForm({ ...form, join_date: e.target.value })} />}</div><div className="form-actions"><Button variant="ghost" type="button" onClick={() => setForm(null)}>Cancel</Button><Button type="submit">Save member</Button></div></form></Modal>}
+    {history && <Modal wide title={`Borrowing history · ${history.member.name}`} onClose={() => setHistory(null)}>{history.loading ? <div className="empty-state">Loading history…</div> : history.records.length ? <table className="data-table"><thead><tr><th>Book</th><th>Borrowed</th><th>Due</th><th>Status</th></tr></thead><tbody>{history.records.map(r => <tr key={r.id}><td>{r.book?.title || `Book #${r.book_id}`}</td><td>{new Date(r.borrow_date).toLocaleDateString()}</td><td>{new Date(r.due_date).toLocaleDateString()}</td><td>{r.return_date ? 'Returned' : 'Active'}</td></tr>)}</tbody></table> : <div className="empty-state">No borrowing history.</div>}</Modal>}
+  </div>;
 }

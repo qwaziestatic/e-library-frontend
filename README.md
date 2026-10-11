@@ -1,5 +1,17 @@
 # React + Vite
 
+## Backend configuration
+
+Copy `.env.example` to `.env.local` and set `VITE_API_BASE_URL` to the
+backend's public API URL. The NestJS API exposes its resource routes at the
+root (for example, `/books` and `/auth/login`), while `/api` is reserved for
+Swagger documentation. The development default is `http://localhost:3000`;
+production deployments must provide their public backend URL.
+
+The login form calls `VITE_AUTH_ENDPOINT` (default `/auth/login`) with
+`{ email, password }`. The response must include a JWT in `token` or
+`accessToken` and the authenticated user in `user` (or `staff`).
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

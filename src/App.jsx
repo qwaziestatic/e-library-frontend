@@ -29,9 +29,9 @@ function AppContent() {
 
   // If logged in, show the Sidebar and the respective pages
   return (
-    <div className="flex bg-slate-50 min-h-screen">
+    <div className="bg-slate-50 min-h-screen">
       <Sidebar />
-      <main className="flex-1 ml-64 min-h-screen">
+      <main className="app-main">
         <Routes>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/books" element={<Books />} />

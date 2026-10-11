@@ -1,54 +1,13 @@
-import { useEffect, useState } from 'react';
-import api from '../api/axios';
-import { Plus, Trash2, Tag } from 'lucide-react';
-
+import { useContext, useEffect, useState } from 'react';
+import { Plus, Pencil, Trash2, Tag } from 'lucide-react';
+import api, { getApiErrorMessage } from '../api/axios';
+import { AuthContext } from '../context/AuthContext';
+import { Button, ErrorMessage, Field, Modal, PageHeader } from '../components/ui';
 export default function Genres() {
-  const [genres, setGenres] = useState([]);
-  const [name, setName] = useState('');
-
-  const fetchGenres = async () => {
-    const res = await api.get('/genres');
-    setGenres(res.data);
-  };
-
-  useEffect(() => { fetchGenres(); }, []);
-
-  const handleAdd = async (e) => {
-    e.preventDefault();
-    await api.post('/genres', { name });
-    setName('');
-    fetchGenres();
-  };
-
-  const handleDelete = async (id) => {
-    if (confirm("Delete this genre?")) {
-      await api.delete(`/genres/${id}`);
-      fetchGenres();
-    }
-  };
-
-  return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold mb-6">Book Genres</h1>
-      <form onSubmit={handleAdd} className="mb-8 flex gap-2">
-        <input 
-          className="border p-2 rounded-lg w-64 outline-none focus:ring-2 focus:ring-blue-500" 
-          placeholder="New Genre (e.g. Fiction)"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <button className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2">
-          <Plus size={18}/> Add
-        </button>
-      </form>
-      <div className="grid grid-cols-3 gap-4">
-        {genres.map(g => (
-          <div key={g.id} className="bg-white p-4 rounded-xl shadow-sm border flex justify-between items-center">
-            <div className="flex items-center gap-2"><Tag size={16} className="text-blue-500"/> {g.name}</div>
-            <button onClick={() => handleDelete(g.id)} className="text-red-400 hover:text-red-600"><Trash2 size={18}/></button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+  const { user } = useContext(AuthContext);
+  const [genres, setGenres] = useState([]); const [form, setForm] = useState(null); const [error, setError] = useState('');
+  const load = async () => { try { setGenres((await api.get('/genres')).data); } catch (e) { setError(getApiErrorMessage(e, 'Unable to load genres.')); } }; useEffect(() => { load(); }, []);
+  const save = async e => { e.preventDefault(); try { if (form.id) await api.patch(`/genres/${form.id}`, { name: form.name }); else await api.post('/genres', { name: form.name }); setForm(null); load(); } catch (e) { setError(getApiErrorMessage(e, 'Unable to save genre.')); } };
+  const remove = async id => { if (!window.confirm('Delete this genre?')) return; try { await api.delete(`/genres/${id}`); load(); } catch (e) { setError(getApiErrorMessage(e, 'Unable to delete genre.')); } };
+  return <div className="page-shell"><PageHeader eyebrow="Catalog settings" title="Genres" description="Organize your collection." action={user?.role === 'admin' && <Button onClick={() => setForm({ name: '' })}><Plus size={17} /> Add genre</Button>} /><ErrorMessage message={error} /><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{genres.map(g => <div className="card p-5 flex items-center justify-between" key={g.id}><div className="flex items-center gap-3"><Tag size={18} className="text-blue-600" /><strong>{g.name}</strong></div>{user?.role === 'admin' && <div><button className="button button-ghost" onClick={() => setForm(g)}><Pencil size={16} /></button><button className="button button-danger" onClick={() => remove(g.id)}><Trash2 size={16} /></button></div>}</div>)}</div>{!genres.length && <div className="card empty-state">No genres yet.</div>}{form && <Modal title={form.id ? 'Edit genre' : 'Add genre'} onClose={() => setForm(null)}><form onSubmit={save}><Field label="Genre name" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /><div className="form-actions"><Button variant="ghost" type="button" onClick={() => setForm(null)}>Cancel</Button><Button type="submit">Save genre</Button></div></form></Modal>}</div>;
 }

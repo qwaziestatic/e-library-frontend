@@ -1,50 +1,20 @@
 import { useEffect, useState } from 'react';
-import api from '../api/axios';
-import { Book, Users, ClipboardCheck, Clock } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { BookOpen, Users, ArrowUpRight, AlertTriangle, TrendingUp, Clock } from 'lucide-react';
+import api, { getApiErrorMessage } from '../api/axios';
+import { ErrorMessage, PageHeader } from '../components/ui';
 
 export default function Dashboard() {
-  const [stats, setStats] = useState({ books: 0, members: 0, borrows: 0, overdue: 0 });
-
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const [books, members, records] = await Promise.all([
-          api.get('/books'),
-          api.get('/members'),
-          api.get('/borrow-records')
-        ]);
-        setStats({
-          books: books.data.length,
-          members: members.data.length,
-          borrows: records.data.filter(r => !r.returnDate).length,
-          overdue: records.data.filter(r => !r.returnDate && new Date(r.dueDate) < new Date()).length
-        });
-      } catch (err) { console.error("Error fetching stats:", err); }
-    };
-    fetchStats();
-  }, []);
-
-  return (
-    <div className="p-10">
-      <h1 className="text-3xl font-bold text-slate-800 mb-8">Library Insights</h1>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <StatCard label="Total Books" val={stats.books} icon={Book} color="text-blue-600" bg="bg-blue-100" />
-        <StatCard label="Members" val={stats.members} icon={Users} color="text-green-600" bg="bg-green-100" />
-        <StatCard label="Active Borrows" val={stats.borrows} icon={ClipboardCheck} color="text-orange-600" bg="bg-orange-100" />
-        <StatCard label="Overdue Books" val={stats.overdue} icon={Clock} color="text-red-600" bg="bg-red-100" />
-      </div>
-    </div>
-  );
+  const [data, setData] = useState({ books: [], members: [], records: [], overdue: [], popular: [] });
+  const [error, setError] = useState('');
+  useEffect(() => { Promise.all([api.get('/books'), api.get('/members'), api.get('/borrow-records'), api.get('/borrow-records/reports/overdue'), api.get('/borrow-records/reports/popular-genres')]).then(([books, members, records, overdue, popular]) => setData({ books: books.data, members: members.data, records: records.data, overdue: overdue.data, popular: popular.data })).catch(e => setError(getApiErrorMessage(e, 'Unable to load dashboard.'))); }, []);
+  const active = data.records.filter(r => !r.return_date).length;
+  return <div className="page-shell"><PageHeader eyebrow="Overview" title="Good morning, librarian" description="A clear view of what is happening in your library today." action={<Link className="button button-primary" to="/borrows">Manage borrowing <ArrowUpRight size={16} /></Link>} /><ErrorMessage message={error} />
+    <div className="stat-grid"><Stat icon={BookOpen} label="Total books" value={data.books.length} /><Stat icon={Users} label="Active members" value={data.members.length} /><Stat icon={Clock} label="Active borrows" value={active} /><Stat icon={AlertTriangle} label="Overdue" value={data.overdue.length} danger /></div>
+    <div className="report-grid"><section className="card report-card"><div className="flex items-center justify-between"><h2>Overdue returns</h2><Link className="text-blue-600 text-sm font-bold" to="/borrows">View all</Link></div>{data.overdue.length ? data.overdue.slice(0, 5).map(r => <div className="list-row" key={r.id}><span><strong>{r.book?.title || `Book #${r.book_id}`}</strong><small className="block text-slate-500">{r.member?.name || 'Member'} · due {formatDate(r.due_date)}</small></span><span className="badge badge-red">Overdue</span></div>) : <p className="empty-state">No overdue books. Great work!</p>}</section>
+      <section className="card report-card"><h2><TrendingUp size={17} className="inline mr-2 text-blue-600" />Popular genres</h2>{data.popular.length ? data.popular.slice(0, 6).map((g, i) => <div className="list-row" key={g.genre_id || g.id || i}><span>{g.genre_name || g.name || 'Unknown genre'}</span><strong>{g.borrow_count ?? g.count ?? 0}</strong></div>) : <p className="empty-state">No borrowing data yet.</p>}</section></div>
+  </div>;
 }
-
-function StatCard({ label, val, icon: Icon, color, bg }) {
-  return (
-    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-      <div className={`${bg} ${color} w-12 h-12 rounded-xl flex items-center justify-center mb-4`}>
-        <Icon size={24} />
-      </div>
-      <p className="text-slate-500 font-medium">{label}</p>
-      <p className="text-3xl font-bold text-slate-900">{val}</p>
-    </div>
-  );
-}
+/* eslint-disable-next-line no-unused-vars */
+function Stat({ icon: Icon, label, value, danger }) { return <div className="card stat-card"><Icon size={20} className={danger ? 'text-red-500' : 'text-blue-600'} /><p>{label}</p><strong className={danger ? 'text-red-600' : ''}>{value}</strong></div>; }
+function formatDate(value) { return value ? new Date(value).toLocaleDateString() : '—'; }
